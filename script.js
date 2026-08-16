@@ -4,13 +4,29 @@
 
     const JSON_URL = "QmepLNcj9mCDaTjVvmCM6ocr9xtjvMbWNTmaCSoaYVmqgq";
     
-    // Optimized gateway list
+// 1. Expanded and Reordered Gateway List (Prioritizing CDN-backed public nodes)
     const IPFS_GATEWAYS = [
-        'https://dweb.link/ipfs/',
-        'https://gateway.pinata.cloud/ipfs/',
-        'https://cloudflare-ipfs.com/ipfs/',
-        'https://ipfs.io/ipfs/' 
+        'https://nftstorage.link/ipfs/',     // Highly optimized for media
+        'https://ipfs.io/ipfs/',             // Slow, but usually doesn't block
+        'https://w3s.link/ipfs/',            // Web3 Storage
+        'https://cloudflare-ipfs.com/ipfs/', // Often blocked, but fast if it works
+        'https://dweb.link/ipfs/',           // Heavy rate limiting
+        'https://gateway.pinata.cloud/ipfs/' // Heavily rate limits free users
     ];
+
+    // 2. Updated URL Generator to handle subdomains and paths safely
+    function getUrls(cid) {
+        if (!cid) return [];
+        if (cid.startsWith("http")) return [cid];
+        
+        // Strip out the ipfs:// protocol if present
+        const hash = cid.replace('ipfs://', '');
+        
+        if (USE_LOCAL_GITHUB_FILES) return [`${GITHUB_BASE_URL}${hash}`];
+        
+        // Map the single CID to our massive list of gateways
+        return IPFS_GATEWAYS.map(gw => `${gw}${hash}`);
+    }
 
     const ARTISTS_LIST = [
         "Pradeep Kumar", "Anthony Daasan", "Kalyani Nair", "Susha", "Ghana NB",
