@@ -4,12 +4,12 @@
 
     const JSON_URL = "QmepLNcj9mCDaTjVvmCM6ocr9xtjvMbWNTmaCSoaYVmqgq";
     
-    // Web3-Optimized Media Gateways
+    // Web3-Optimized Fast Gateways
     const IPFS_GATEWAYS = [
-        'https://nftstorage.link/ipfs/',     // Specifically built for heavy NFT media
-        'https://w3s.link/ipfs/',            // Web3.storage high-speed node
-        'https://dweb.link/ipfs/',           // Good fallback
-        'https://ipfs.io/ipfs/'              // Heavily rate-limited, but reliable last resort
+        'https://ipfs.io/ipfs/',             
+        'https://dweb.link/ipfs/',           
+        'https://cloudflare-ipfs.com/ipfs/',
+        'https://gateway.pinata.cloud/ipfs/' 
     ];
 
     const ARTISTS_LIST = [
@@ -24,39 +24,34 @@
         "Jhanu", "Metapurse"
     ];
 
-    // THE FAILSAFE: If IPFS is completely blocked, this ensures the UI still builds perfectly.
     const FALLBACK_METADATA = {
-        "layout": {
-            "layers": [
-                { "id": "Strings", "name": "Strings", "states": { "options": [{ "name": "Default String", "uri": "" }] } },
-                { "id": "Winds", "name": "Winds", "states": { "options": [{ "name": "Default Wind", "uri": "" }] } },
-                { "id": "Ambience", "name": "Ambience", "states": { "options": [{ "name": "Default Ambience", "uri": "" }] } },
-                { "id": "Rhythm", "name": "Rhythm", "states": { "options": [{ "name": "Default Rhythm", "uri": "" }] } },
-                { "id": "Traditional", "name": "Traditional", "states": { "options": [{ "name": "Default Traditional", "uri": "" }] } },
-                { "id": "Voices", "name": "Voices", "states": { "options": [{ "name": "Default Voice", "uri": "" }] } },
-                { "id": "Guitars", "name": "Guitars", "states": { "options": [{ "name": "Default Guitar", "uri": "" }] } },
-                { "id": "Keys", "name": "Keys", "states": { "options": [{ "name": "Default Keys", "uri": "" }] } },
-                { "id": "Electronic", "name": "Electronic", "states": { "options": [{ "name": "Default Electronic", "uri": "" }] } }
-            ]
-        },
-        "audio-layout": {
-            "layers": [
-                { "id": "Strings", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Winds", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Ambience", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Rhythm", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Traditional", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Voices", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Guitars", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Keys", "states": { "options": [{ "uri": "" }] } },
-                { "id": "Electronic", "states": { "options": [{ "uri": "" }] } }
-            ]
-        }
+        "layout": { "layers": [
+            { "id": "Strings", "name": "Strings", "states": { "options": [{ "name": "Default String", "uri": "" }] } },
+            { "id": "Winds", "name": "Winds", "states": { "options": [{ "name": "Default Wind", "uri": "" }] } },
+            { "id": "Ambience", "name": "Ambience", "states": { "options": [{ "name": "Default Ambience", "uri": "" }] } },
+            { "id": "Rhythm", "name": "Rhythm", "states": { "options": [{ "name": "Default Rhythm", "uri": "" }] } },
+            { "id": "Traditional", "name": "Traditional", "states": { "options": [{ "name": "Default Traditional", "uri": "" }] } },
+            { "id": "Voices", "name": "Voices", "states": { "options": [{ "name": "Default Voice", "uri": "" }] } },
+            { "id": "Guitars", "name": "Guitars", "states": { "options": [{ "name": "Default Guitar", "uri": "" }] } },
+            { "id": "Keys", "name": "Keys", "states": { "options": [{ "name": "Default Keys", "uri": "" }] } },
+            { "id": "Electronic", "name": "Electronic", "states": { "options": [{ "name": "Default Electronic", "uri": "" }] } }
+        ]},
+        "audio-layout": { "layers": [
+            { "id": "Strings", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Winds", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Ambience", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Rhythm", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Traditional", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Voices", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Guitars", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Keys", "states": { "options": [{ "uri": "" }] } },
+            { "id": "Electronic", "states": { "options": [{ "uri": "" }] } }
+        ]}
     };
 
     const state = {
         metadata: null,
-        audioPool: {}, 
+        audioPool: {}, // NOW MAPS BY CID FOR INSTANT CACHE SHUFFLING
         visualSlots: {}, 
         selections: { visuals: {}, audio: {} },
         isPlaying: false,
@@ -138,7 +133,7 @@
         UI.activeTags.innerHTML = '';
         UI.controls.querySelectorAll('.layer-select').forEach(select => {
             const opt = select.options[select.selectedIndex];
-            if (opt) {
+            if (opt && opt.text && !opt.text.includes("Option")) {
                 const tag = document.createElement("span");
                 tag.className = "playing-tag";
                 tag.textContent = opt.text;
@@ -150,13 +145,10 @@
     async function fetchJSON() {
         for (let i = 0; i < IPFS_GATEWAYS.length; i++) {
             const gateway = IPFS_GATEWAYS[i];
-            
-            if (UI.loadingText) {
-                UI.loadingText.textContent = `Connecting to Node ${i + 1}...`;
-            }
+            if (UI.loadingText) UI.loadingText.textContent = `Connecting to Node ${i + 1}...`;
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000); 
+            const timeoutId = setTimeout(() => controller.abort(), 3500); 
 
             try {
                 const res = await fetch(`${gateway}${JSON_URL}`, { signal: controller.signal });
@@ -164,111 +156,112 @@
                 if (res.ok) return await res.json();
             } catch (e) {
                 clearTimeout(timeoutId);
-                console.warn(`Gateway ${gateway} timed out or failed.`);
             }
         }
-        
-        throw new Error("All IPFS gateways failed to load metadata.");
+        throw new Error("Metadata failed.");
     }
 
-    // THE WATERFALL LOADER: Loads audio stems sequentially to avoid 504 timeouts
+    // NEW ARCHITECTURE: Audio nodes are mapped by CID. This makes shuffling instant if previously loaded.
+    function getOrCreateAudioNode(cid) {
+        if (state.audioPool[cid]) return state.audioPool[cid];
+        
+        const audio = new Audio();
+        audio.crossOrigin = "anonymous";
+        audio.loop = true;
+        audio.preload = "auto";
+        audio.preservesPitch = false;
+        
+        const urls = getUrls(cid);
+        if (urls.length === 0) return audio;
+
+        let attempt = 0;
+        audio.addEventListener('error', () => {
+            attempt++;
+            if (attempt < urls.length) {
+                audio.src = urls[attempt];
+                audio.load();
+            }
+        });
+        
+        audio.src = urls[attempt];
+        audio.load();
+        
+        state.audioPool[cid] = audio;
+        return audio;
+    }
+
+    // THE FIX: High-Speed Parallel Loader with 3.5s Kill Switch
     async function loadAudioStreams() {
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
+        if (UI.loadingText) UI.loadingText.textContent = "Syncing Neural Mix...";
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = true;
 
-        const layerIds = Object.keys(state.selections.audio);
+        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
         
-        // Load files one by one (Sequential) instead of all at once (Parallel)
-        for (let i = 0; i < layerIds.length; i++) {
-            const layerId = layerIds[i];
-            
-            if (UI.loadingText) {
-                UI.loadingText.textContent = `Syncing Layer ${i + 1} of ${layerIds.length}: ${layerId}...`;
-            }
-
-            await new Promise((resolve) => {
-                const cid = state.selections.audio[layerId];
-                const audioNode = state.audioPool[layerId]; 
+        // 1. Create or fetch nodes for the current selection
+        const loadPromises = targetCids.map(cid => {
+            return new Promise(resolve => {
+                const node = getOrCreateAudioNode(cid);
                 
-                if (!cid || !audioNode) { resolve(null); return; }
-
-                const urls = getUrls(cid);
-                if (urls.length === 0) { resolve(null); return; }
-
-                if (audioNode.src && urls.some(u => audioNode.src.includes(u.split('/').pop()))) {
-                    resolve({ layerId, audioNode });
+                // If it's already buffered from a previous shuffle, resolve instantly (0ms latency!)
+                if (node.readyState >= 3) {
+                    if (node.duration > state.duration) state.duration = node.duration;
+                    resolve();
                     return;
                 }
 
-                audioNode.volume = 0; 
-                let attempt = 0;
                 let isResolved = false;
-
-                const finish = (val) => {
+                const finish = () => {
                     if (isResolved) return;
                     isResolved = true;
-                    resolve(val);
+                    if (node.duration > state.duration) state.duration = node.duration;
+                    resolve();
                 };
 
-                const onCanPlay = () => {
-                    if (audioNode.duration > state.duration) state.duration = audioNode.duration;
-                    finish({ layerId, audioNode });
-                };
+                node.addEventListener('canplaythrough', finish, { once: true });
+                node.addEventListener('loadeddata', finish, { once: true });
 
-                audioNode.addEventListener('canplaythrough', onCanPlay, { once: true });
-                audioNode.addEventListener('loadeddata', onCanPlay, { once: true });
-
-                audioNode.addEventListener('error', () => { 
-                    attempt++;
-                    if (attempt < urls.length) {
-                        audioNode.src = urls[attempt];
-                        audioNode.load();
-                    } else { 
-                        finish(null); 
-                    }
-                }); 
-                
-                audioNode.src = urls[attempt];
-                audioNode.load();
-
-                // 4-SECOND FAILSAFE: Do not permanently lock the UI if audio stems hang
-                setTimeout(() => finish(null), 4000);
+                // FAST FAIL: Max 3.5 seconds waiting for IPFS before letting the user play
+                setTimeout(finish, 3500); 
             });
-            
-            // Add a tiny 250ms breather between requests so the IPFS node doesn't block us
-            await new Promise(r => setTimeout(r, 250)); 
-        }
+        });
 
-        // --- Post-Loading Sync Logic ---
-        let syncTime = 0;
-        const currentActiveNodes = Object.values(state.audioPool).filter(n => !n.paused && n.volume > 0);
-        if (currentActiveNodes.length > 0) syncTime = currentActiveNodes[0].currentTime;
+        // Load all 9 in parallel just like last week
+        await Promise.all(loadPromises);
 
-        Object.keys(state.selections.audio).forEach(layerId => {
-            const cid = state.selections.audio[layerId];
-            const node = state.audioPool[layerId];
-            
-            if (cid && node) {
+        // 2. Determine Master Clock Time
+        let masterTime = 0;
+        const currentlyPlaying = Object.values(state.audioPool).filter(n => !n.paused && n.volume > 0);
+        if (currentlyPlaying.length > 0) masterTime = currentlyPlaying[0].currentTime;
+
+        // 3. Mute EVERYTHING in the memory pool
+        Object.values(state.audioPool).forEach(node => {
+            node.volume = 0;
+            // Only pause if it's not part of the new selection to save CPU
+            if (!targetCids.includes(Object.keys(state.audioPool).find(key => state.audioPool[key] === node))) {
+                node.pause(); 
+            }
+        });
+
+        // 4. Activate ONLY the requested layers
+        targetCids.forEach(cid => {
+            const node = state.audioPool[cid];
+            if (node) {
                 if (state.isPlaying) {
-                    node.currentTime = syncTime;
+                    node.currentTime = masterTime;
                     const p = node.play();
                     if (p !== undefined) p.catch(() => {});
                 }
-            } else if (node) {
-                node.pause();
+                node.volume = 1;
             }
         });
 
         if (state.isPlaying) {
             enforceSync();
-            setTimeout(() => { enforceSync(); }, 200);
-            
-            Object.keys(state.selections.audio).forEach(layerId => {
-                if (state.selections.audio[layerId]) state.audioPool[layerId].volume = 1;
-            });
+            setTimeout(enforceSync, 200);
         }
 
-        if (UI.totalTimeEl) UI.totalTimeEl.textContent = formatTime(state.duration);
+        if (UI.totalTimeEl && state.duration > 0) UI.totalTimeEl.textContent = formatTime(state.duration);
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = false;
         if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
     }
@@ -276,12 +269,14 @@
     function enforceSync() {
         if (state.isSeeking) return;
 
-        const nodes = Object.values(state.audioPool).filter(n => !n.paused && n.src);
-        if (nodes.length <= 1) return;
+        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
+        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n && !n.paused && n.readyState > 0);
         
-        const master = nodes[0];
-        nodes.forEach((node, i) => {
-            if (i === 0) return;
+        if (activeNodes.length <= 1) return;
+        
+        const master = activeNodes[0];
+        for (let i = 1; i < activeNodes.length; i++) {
+            const node = activeNodes[i];
             const drift = node.currentTime - master.currentTime;
             
             if (Math.abs(drift) > 0.2) {
@@ -291,20 +286,22 @@
             } else {
                 node.playbackRate = 1.0;
             }
-        });
+        }
     }
 
     function playAudio(targetTime = null) {
-        const nodes = Object.values(state.audioPool).filter(n => n.src);
-        if (nodes.length === 0) return;
-
-        const timeToSet = targetTime !== null ? targetTime : (nodes[0].currentTime || 0);
+        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
+        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n);
         
-        nodes.forEach(node => { 
+        if (activeNodes.length === 0) return;
+
+        const timeToSet = targetTime !== null ? targetTime : (activeNodes[0].currentTime || 0);
+        
+        activeNodes.forEach(node => { 
             node.volume = 0;
             node.currentTime = timeToSet; 
             const p = node.play();
-            if (p !== undefined) { p.catch(err => console.warn("Browser blocked play", err)); }
+            if (p !== undefined) p.catch(() => {});
         });
 
         state.isPlaying = true;
@@ -315,7 +312,7 @@
 
         setTimeout(() => {
             enforceSync();
-            nodes.forEach(node => { node.volume = 1; });
+            activeNodes.forEach(node => { node.volume = 1; });
         }, 250);
 
         if (state.syncInterval) clearInterval(state.syncInterval);
@@ -354,8 +351,10 @@
         state.isSeeking = true;
         if (state.syncInterval) clearInterval(state.syncInterval);
 
-        const nodes = Object.values(state.audioPool).filter(n => n.src);
-        if (nodes.length === 0) {
+        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
+        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n);
+        
+        if (activeNodes.length === 0) {
             state.isSeeking = false;
             return;
         }
@@ -365,33 +364,31 @@
         if (UI.currentTimeEl) UI.currentTimeEl.textContent = formatTime(targetTime);
 
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
-        if (UI.loadingText) UI.loadingText.textContent = "Syncing Layers...";
+        if (UI.loadingText) UI.loadingText.textContent = "Syncing Position...";
 
-        nodes.forEach(node => {
+        activeNodes.forEach(node => {
             node.pause();
             node.volume = 0;
             node.playbackRate = 1.0; 
         });
 
-        const seekPromises = nodes.map(node => {
+        const seekPromises = activeNodes.map(node => {
             return new Promise(resolve => {
                 const onReady = () => {
                     node.removeEventListener('seeked', onReady);
                     node.removeEventListener('canplay', onReady);
                     resolve();
                 };
-                
                 node.addEventListener('seeked', onReady);
                 node.addEventListener('canplay', onReady);
                 node.currentTime = targetTime;
-
-                setTimeout(resolve, 3000); 
+                setTimeout(resolve, 2500); // Failsafe
             });
         });
 
         await Promise.all(seekPromises);
 
-        nodes.forEach(node => {
+        activeNodes.forEach(node => {
             node.currentTime = targetTime;
             node.volume = 1; 
         });
@@ -400,7 +397,7 @@
         if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
 
         if (state.isPlaying) {
-            nodes.forEach(node => {
+            activeNodes.forEach(node => {
                 const p = node.play();
                 if (p !== undefined) p.catch(() => {});
             });
@@ -420,18 +417,17 @@
         }
 
         if (clientX === undefined || clientX === null) return;
-
         const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-        const targetTime = percentage * state.duration;
-
-        seekTo(targetTime);
+        seekTo(percentage * state.duration);
     }
 
     function updateLoop() {
         if (!state.isPlaying || state.isSeeking) return;
-        const nodes = Object.values(state.audioPool).filter(n => !n.paused && n.src);
-        if (nodes.length > 0 && UI.progressFill && UI.currentTimeEl) {
-            const current = nodes[0].currentTime;
+        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
+        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n && !n.paused && n.readyState > 0);
+        
+        if (activeNodes.length > 0 && UI.progressFill && UI.currentTimeEl) {
+            const current = activeNodes[0].currentTime;
             UI.progressFill.style.width = `${(current / state.duration) * 100}%`;
             UI.currentTimeEl.textContent = formatTime(current);
         }
@@ -467,19 +463,13 @@
             let attempt = 0;
             img.onload = () => {
                 if (slot.dataset.targetCid !== cid) return;
-
                 const oldImages = Array.from(slot.querySelectorAll('img'));
-                
                 oldImages.forEach(oldImg => {
                     oldImg.classList.remove('layer-visible');
                     setTimeout(() => { if (oldImg.parentNode) oldImg.remove(); }, 1200);
                 });
-
                 slot.appendChild(img);
-                
-                requestAnimationFrame(() => {
-                    img.classList.add('layer-visible');
-                });
+                requestAnimationFrame(() => img.classList.add('layer-visible'));
             };
             img.onerror = () => { attempt++; if (attempt < urls.length) img.src = urls[attempt]; };
             img.src = urls[attempt];
@@ -490,7 +480,6 @@
         state.selections.visuals[layerId] = visualCid;
         state.selections.audio[layerId] = audioCid;
         renderTags(); 
-        
         updateVisuals(layerId); 
         await loadAudioStreams(); 
     }
@@ -500,16 +489,13 @@
         
         if (UI.loadingOverlay) {
             UI.loadingOverlay.classList.remove('hidden');
-            if (UI.loadingText) UI.loadingText.textContent = "Booting Gateway & Locating Blueprint...";
+            if (UI.loadingText) UI.loadingText.textContent = "Fetching Blueprint...";
         }
         
         try {
             state.metadata = await fetchJSON();
-            if (UI.loadingText) UI.loadingText.textContent = "Blueprint Found. Building UI...";
         } catch (e) {
-            console.warn("IPFS Fetch Failed. Injecting Offline Fallback UI.", e);
             state.metadata = FALLBACK_METADATA; 
-            if (UI.loadingText) UI.loadingText.textContent = "Offline Mode: IPFS Blocked. UI Built from Fallback.";
         }
 
         try {
@@ -521,13 +507,6 @@
             visuals.forEach((layer, index) => {
                 const layerId = layer.id || `layer_${index}`;
                 
-                const audio = new Audio();
-                audio.crossOrigin = "anonymous";
-                audio.loop = true;
-                audio.preload = "auto";
-                audio.preservesPitch = false;
-                state.audioPool[layerId] = audio;
-
                 const slot = document.createElement('div');
                 slot.className = 'layer-slot';
                 slot.style.zIndex = index + 5; 
@@ -542,10 +521,8 @@
 
                 if (layer.states?.options?.length > 0) {
                     const audioLayer = audios[index];
-                    
                     const div = document.createElement("div");
                     div.className = "dropdown-group";
-                    
                     const label = document.createElement("label");
                     label.textContent = layer.name || layerId.replace(/[_-]/g, ' ');
                     
@@ -572,8 +549,9 @@
                 }
             });
 
+            // Set random initial selection
             UI.controls.querySelectorAll('.layer-select').forEach(select => {
-                select.selectedIndex = 0; 
+                select.selectedIndex = Math.floor(Math.random() * select.options.length);
                 const data = JSON.parse(select.value);
                 state.selections.visuals[select.dataset.layerId] = data.visual;
                 state.selections.audio[select.dataset.layerId] = data.audio;
@@ -584,11 +562,10 @@
 
             setTimeout(() => {
                 if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
-            }, 1000);
+            }, 500);
 
         } catch (e) {
-            console.error("Critical Failure building UI", e);
-            if (UI.loadingText) UI.loadingText.textContent = "Critical UI Error. Check Console.";
+            console.error("UI Build Failure", e);
         }
     }
 
@@ -601,13 +578,10 @@
 
     if (UI.enterBtn && UI.gatewayPage && UI.playerPage) {
         UI.enterBtn.addEventListener('click', async () => {
-            
-            Object.values(state.audioPool).forEach(node => {
-                node.volume = 0;
-                const p = node.play();
-                if (p !== undefined) p.catch(()=>{});
-                node.pause();
-            });
+            // Unlock browser audio context securely
+            const unlock = new Audio();
+            unlock.volume = 0;
+            unlock.play().catch(()=>{});
 
             UI.gatewayPage.classList.remove('active');
             setTimeout(() => {
@@ -621,7 +595,7 @@
     }
 
     if (UI.playPauseBtn) {
-        UI.playPauseBtn.addEventListener('click', async () => {
+        UI.playPauseBtn.addEventListener('click', () => {
             if (state.isPlaying) pauseAudio();
             else playAudio();
         });
