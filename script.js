@@ -3,7 +3,8 @@
     const GITHUB_BASE_URL = "./"; 
 
     const JSON_URL = "QmepLNcj9mCDaTjVvmCM6ocr9xtjvMbWNTmaCSoaYVmqgq";
-    // Reordered to prioritize faster, CORS-friendly gateways
+    
+    // Optimized gateway list
     const IPFS_GATEWAYS = [
         'https://dweb.link/ipfs/',
         'https://gateway.pinata.cloud/ipfs/',
@@ -22,6 +23,36 @@
         "Amrit", "Aarvay", "Radar with a K", "Keba Jeremiah", "Shallu Varun",
         "Jhanu", "Metapurse"
     ];
+
+    // THE FAILSAFE: If IPFS is completely blocked, this ensures the UI still builds perfectly.
+    const FALLBACK_METADATA = {
+        "layout": {
+            "layers": [
+                { "id": "Strings", "name": "Strings", "states": { "options": [{ "name": "Default String", "uri": "" }] } },
+                { "id": "Winds", "name": "Winds", "states": { "options": [{ "name": "Default Wind", "uri": "" }] } },
+                { "id": "Ambience", "name": "Ambience", "states": { "options": [{ "name": "Default Ambience", "uri": "" }] } },
+                { "id": "Rhythm", "name": "Rhythm", "states": { "options": [{ "name": "Default Rhythm", "uri": "" }] } },
+                { "id": "Traditional", "name": "Traditional", "states": { "options": [{ "name": "Default Traditional", "uri": "" }] } },
+                { "id": "Voices", "name": "Voices", "states": { "options": [{ "name": "Default Voice", "uri": "" }] } },
+                { "id": "Guitars", "name": "Guitars", "states": { "options": [{ "name": "Default Guitar", "uri": "" }] } },
+                { "id": "Keys", "name": "Keys", "states": { "options": [{ "name": "Default Keys", "uri": "" }] } },
+                { "id": "Electronic", "name": "Electronic", "states": { "options": [{ "name": "Default Electronic", "uri": "" }] } }
+            ]
+        },
+        "audio-layout": {
+            "layers": [
+                { "id": "Strings", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Winds", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Ambience", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Rhythm", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Traditional", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Voices", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Guitars", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Keys", "states": { "options": [{ "uri": "" }] } },
+                { "id": "Electronic", "states": { "options": [{ "uri": "" }] } }
+            ]
+        }
+    };
 
     const state = {
         metadata: null,
@@ -116,11 +147,18 @@
         });
     }
 
-    // ARCHITECTURE FIX: Fast-Fail IPFS JSON Fetching with AbortController
+    // ARCHITECTURE FIX: Visible Feedback & Strict Fallback Mechanism
     async function fetchJSON() {
-        for (const gateway of IPFS_GATEWAYS) {
+        for (let i = 0; i < IPFS_GATEWAYS.length; i++) {
+            const gateway = IPFS_GATEWAYS[i];
+            
+            // Show real-time feedback on UI so user knows it's not frozen
+            if (UI.loadingText) {
+                UI.loadingText.textContent = `Connecting to Node ${i + 1}...`;
+            }
+
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-second hard cutoff per gateway
+            const timeoutId = setTimeout(() => controller.abort(), 4000); 
 
             try {
                 const res = await fetch(`${gateway}${JSON_URL}`, { signal: controller.signal });
@@ -128,18 +166,15 @@
                 if (res.ok) return await res.json();
             } catch (e) {
                 clearTimeout(timeoutId);
-                console.warn(`Gateway ${gateway} timed out or failed. Hopping to next...`);
+                console.warn(`Gateway ${gateway} timed out or failed.`);
             }
         }
         
-        // Critical Fallback UI Update
-        if (UI.loadingText) UI.loadingText.textContent = "Network Error: IPFS Gateways Blocked.";
         throw new Error("All IPFS gateways failed to load metadata.");
     }
 
-    // ARCHITECTURE FIX: True Non-Blocking Soft-Sync Audio Loading
     async function loadAudioStreams() {
-        UI.loadingOverlay.classList.remove('hidden');
+        if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
         if (UI.loadingText) UI.loadingText.textContent = "Connecting Layers...";
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = true;
 
@@ -189,8 +224,7 @@
                 audioNode.src = urls[attempt];
                 audioNode.load();
 
-                // THE FAILSAFE: If IPFS is choking, strictly unlock this promise after 5 seconds
-                // It will continue buffering in the background and sync up later.
+                // 5-SECOND FAILSAFE: Do not permanently lock the UI if audio stems hang
                 setTimeout(() => finish(null), 5000);
             });
         });
@@ -227,7 +261,7 @@
 
         if (UI.totalTimeEl) UI.totalTimeEl.textContent = formatTime(state.duration);
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = false;
-        UI.loadingOverlay.classList.add('hidden');
+        if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
     }
 
     function enforceSync() {
@@ -321,7 +355,7 @@
         if (UI.progressFill) UI.progressFill.style.width = `${percent}%`;
         if (UI.currentTimeEl) UI.currentTimeEl.textContent = formatTime(targetTime);
 
-        UI.loadingOverlay.classList.remove('hidden');
+        if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
         if (UI.loadingText) UI.loadingText.textContent = "Syncing Layers...";
 
         nodes.forEach(node => {
@@ -342,7 +376,6 @@
                 node.addEventListener('canplay', onReady);
                 node.currentTime = targetTime;
 
-                // Failsafe timeout to unlock seek if network hangs
                 setTimeout(resolve, 3000); 
             });
         });
@@ -355,7 +388,7 @@
         });
 
         state.isSeeking = false;
-        UI.loadingOverlay.classList.add('hidden');
+        if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
 
         if (state.isPlaying) {
             nodes.forEach(node => {
@@ -453,11 +486,27 @@
         await loadAudioStreams(); 
     }
 
+    // THE FIX: Bulletproof Initialization
     async function init() {
         populateArtists();
         
+        // Expose loading screen instantly so the user is never left in the dark
+        if (UI.loadingOverlay) {
+            UI.loadingOverlay.classList.remove('hidden');
+            if (UI.loadingText) UI.loadingText.textContent = "Booting Gateway & Locating Blueprint...";
+        }
+        
         try {
             state.metadata = await fetchJSON();
+            if (UI.loadingText) UI.loadingText.textContent = "Blueprint Found. Building UI...";
+        } catch (e) {
+            console.warn("IPFS Fetch Failed. Injecting Offline Fallback UI.", e);
+            // Inject the hardcoded data to completely bypass the crash
+            state.metadata = FALLBACK_METADATA; 
+            if (UI.loadingText) UI.loadingText.textContent = "Offline Mode: IPFS Blocked. UI Built from Fallback.";
+        }
+
+        try {
             const visuals = (state.metadata.layout?.layers || []).slice(0, 10);
             const audios = (state.metadata["audio-layout"]?.layers || []).slice(0, 10);
 
@@ -478,9 +527,9 @@
                 slot.style.zIndex = index + 5; 
                 
                 const isString = layerId.toLowerCase().includes('string');
-                if (isString) {
+                if (isString && UI.playerBg) {
                     UI.playerBg.appendChild(slot);
-                } else {
+                } else if (UI.layerContainer) {
                     UI.layerContainer.appendChild(slot);
                 }
                 state.visualSlots[layerId] = slot;
@@ -518,7 +567,7 @@
             });
 
             UI.controls.querySelectorAll('.layer-select').forEach(select => {
-                select.selectedIndex = Math.floor(Math.random() * select.options.length);
+                select.selectedIndex = 0; // Default to first option to avoid random empty selection
                 const data = JSON.parse(select.value);
                 state.selections.visuals[select.dataset.layerId] = data.visual;
                 state.selections.audio[select.dataset.layerId] = data.audio;
@@ -527,8 +576,14 @@
             renderTags();
             updateVisuals(); 
 
+            // Safely remove loading overlay after UI is locked in
+            setTimeout(() => {
+                if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
+            }, 1000);
+
         } catch (e) {
-            console.error("Failed to load metadata", e);
+            console.error("Critical Failure building UI", e);
+            if (UI.loadingText) UI.loadingText.textContent = "Critical UI Error. Check Console.";
         }
     }
 
