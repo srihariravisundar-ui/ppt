@@ -51,7 +51,8 @@
 
     const state = {
         metadata: null,
-        audioPool: {}, // NOW MAPS BY CID FOR INSTANT CACHE SHUFFLING
+        audioPool: {}, 
+        imagePool: {}, // VISUAL CACHE POOL
         visualSlots: {}, 
         selections: { visuals: {}, audio: {} },
         isPlaying: false,
@@ -161,7 +162,6 @@
         throw new Error("Metadata failed.");
     }
 
-    // NEW ARCHITECTURE: Audio nodes are mapped by CID. This makes shuffling instant if previously loaded.
     function getOrCreateAudioNode(cid) {
         if (state.audioPool[cid]) return state.audioPool[cid];
         
@@ -190,7 +190,6 @@
         return audio;
     }
 
-    // THE FIX: High-Speed Parallel Loader with 3.5s Kill Switch
     async function loadAudioStreams() {
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
         if (UI.loadingText) UI.loadingText.textContent = "Syncing Neural Mix...";
@@ -198,12 +197,10 @@
 
         const targetCids = Object.values(state.selections.audio).filter(cid => cid);
         
-        // 1. Create or fetch nodes for the current selection
         const loadPromises = targetCids.map(cid => {
             return new Promise(resolve => {
                 const node = getOrCreateAudioNode(cid);
                 
-                // If it's already buffered from a previous shuffle, resolve instantly (0ms latency!)
                 if (node.readyState >= 3) {
                     if (node.duration > state.duration) state.duration = node.duration;
                     resolve();
@@ -221,29 +218,23 @@
                 node.addEventListener('canplaythrough', finish, { once: true });
                 node.addEventListener('loadeddata', finish, { once: true });
 
-                // FAST FAIL: Max 3.5 seconds waiting for IPFS before letting the user play
                 setTimeout(finish, 3500); 
             });
         });
 
-        // Load all 9 in parallel just like last week
         await Promise.all(loadPromises);
 
-        // 2. Determine Master Clock Time
         let masterTime = 0;
         const currentlyPlaying = Object.values(state.audioPool).filter(n => !n.paused && n.volume > 0);
         if (currentlyPlaying.length > 0) masterTime = currentlyPlaying[0].currentTime;
 
-        // 3. Mute EVERYTHING in the memory pool
         Object.values(state.audioPool).forEach(node => {
             node.volume = 0;
-            // Only pause if it's not part of the new selection to save CPU
             if (!targetCids.includes(Object.keys(state.audioPool).find(key => state.audioPool[key] === node))) {
                 node.pause(); 
             }
         });
 
-        // 4. Activate ONLY the requested layers
         targetCids.forEach(cid => {
             const node = state.audioPool[cid];
             if (node) {
@@ -352,7 +343,7 @@
         if (state.syncInterval) clearInterval(state.syncInterval);
 
         const targetCids = Object.values(state.selections.audio).filter(cid => cid);
-        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n);
+        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n && n.src);
         
         if (activeNodes.length === 0) {
             state.isSeeking = false;
@@ -364,11 +355,11 @@
         if (UI.currentTimeEl) UI.currentTimeEl.textContent = formatTime(targetTime);
 
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
-        if (UI.loadingText) UI.loadingText.textContent = "Syncing Position...";
+        if (UI.loadingText) UI.loadingText.textContent = "Realigning Stems...";
 
         activeNodes.forEach(node => {
             node.pause();
-            node.volume = 0;
+            node.volume = 0; 
             node.playbackRate = 1.0; 
         });
 
@@ -376,31 +367,29 @@
             return new Promise(resolve => {
                 const onReady = () => {
                     node.removeEventListener('seeked', onReady);
-                    node.removeEventListener('canplay', onReady);
                     resolve();
                 };
                 node.addEventListener('seeked', onReady);
-                node.addEventListener('canplay', onReady);
                 node.currentTime = targetTime;
-                setTimeout(resolve, 2500); // Failsafe
+                
+                setTimeout(resolve, 2000); 
             });
         });
 
         await Promise.all(seekPromises);
 
         activeNodes.forEach(node => {
-            node.currentTime = targetTime;
-            node.volume = 1; 
+            node.currentTime = targetTime; 
         });
 
         state.isSeeking = false;
         if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
 
         if (state.isPlaying) {
-            activeNodes.forEach(node => {
-                const p = node.play();
-                if (p !== undefined) p.catch(() => {});
-            });
+            const playPromises = activeNodes.map(node => node.play().catch(() => {}));
+            await Promise.all(playPromises);
+            
+            activeNodes.forEach(node => { node.volume = 1; });
             state.syncInterval = setInterval(enforceSync, 600);
         }
     }
@@ -434,6 +423,7 @@
         animationFrameId = requestAnimationFrame(updateLoop);
     }
 
+    // THE FIX: VISUAL RAM CACHE POOL
     function updateVisuals(changedLayerId = null) {
         if (!state.metadata) return;
         const visuals = (state.metadata.layout?.layers || []).slice(0, 10);
@@ -453,23 +443,38 @@
                 return;
             }
 
-            const urls = getUrls(cid);
-            if (urls.length === 0) return;
-
             const isString = layerId.toLowerCase().includes('string');
-            const img = new Image();
-            img.className = isString ? 'bg-layer-cover' : 'layerImage';
-
-            let attempt = 0;
-            img.onload = () => {
+            
+            const renderImage = (imgSource) => {
                 if (slot.dataset.targetCid !== cid) return;
+                
+                const img = imgSource.cloneNode(); 
+                img.className = isString ? 'bg-layer-cover' : 'layerImage';
+                
                 const oldImages = Array.from(slot.querySelectorAll('img'));
                 oldImages.forEach(oldImg => {
                     oldImg.classList.remove('layer-visible');
                     setTimeout(() => { if (oldImg.parentNode) oldImg.remove(); }, 1200);
                 });
+                
                 slot.appendChild(img);
                 requestAnimationFrame(() => img.classList.add('layer-visible'));
+            };
+
+            // If it's already in the pool, render it instantly
+            if (state.imagePool[cid]) {
+                renderImage(state.imagePool[cid]);
+                return;
+            }
+
+            const urls = getUrls(cid);
+            if (urls.length === 0) return;
+
+            const img = new Image();
+            let attempt = 0;
+            img.onload = () => {
+                state.imagePool[cid] = img; // Save to RAM for next time
+                renderImage(img);
             };
             img.onerror = () => { attempt++; if (attempt < urls.length) img.src = urls[attempt]; };
             img.src = urls[attempt];
@@ -578,7 +583,6 @@
 
     if (UI.enterBtn && UI.gatewayPage && UI.playerPage) {
         UI.enterBtn.addEventListener('click', async () => {
-            // Unlock browser audio context securely
             const unlock = new Audio();
             unlock.volume = 0;
             unlock.play().catch(()=>{});
