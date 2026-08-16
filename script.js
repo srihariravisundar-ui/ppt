@@ -4,29 +4,13 @@
 
     const JSON_URL = "QmepLNcj9mCDaTjVvmCM6ocr9xtjvMbWNTmaCSoaYVmqgq";
     
-// 1. Expanded and Reordered Gateway List (Prioritizing CDN-backed public nodes)
+    // Web3-Optimized Media Gateways
     const IPFS_GATEWAYS = [
-        'https://nftstorage.link/ipfs/',     // Highly optimized for media
-        'https://ipfs.io/ipfs/',             // Slow, but usually doesn't block
-        'https://w3s.link/ipfs/',            // Web3 Storage
-        'https://cloudflare-ipfs.com/ipfs/', // Often blocked, but fast if it works
-        'https://dweb.link/ipfs/',           // Heavy rate limiting
-        'https://gateway.pinata.cloud/ipfs/' // Heavily rate limits free users
+        'https://nftstorage.link/ipfs/',     // Specifically built for heavy NFT media
+        'https://w3s.link/ipfs/',            // Web3.storage high-speed node
+        'https://dweb.link/ipfs/',           // Good fallback
+        'https://ipfs.io/ipfs/'              // Heavily rate-limited, but reliable last resort
     ];
-
-    // 2. Updated URL Generator to handle subdomains and paths safely
-    function getUrls(cid) {
-        if (!cid) return [];
-        if (cid.startsWith("http")) return [cid];
-        
-        // Strip out the ipfs:// protocol if present
-        const hash = cid.replace('ipfs://', '');
-        
-        if (USE_LOCAL_GITHUB_FILES) return [`${GITHUB_BASE_URL}${hash}`];
-        
-        // Map the single CID to our massive list of gateways
-        return IPFS_GATEWAYS.map(gw => `${gw}${hash}`);
-    }
 
     const ARTISTS_LIST = [
         "Pradeep Kumar", "Anthony Daasan", "Kalyani Nair", "Susha", "Ghana NB",
@@ -163,12 +147,10 @@
         });
     }
 
-    // ARCHITECTURE FIX: Visible Feedback & Strict Fallback Mechanism
     async function fetchJSON() {
         for (let i = 0; i < IPFS_GATEWAYS.length; i++) {
             const gateway = IPFS_GATEWAYS[i];
             
-            // Show real-time feedback on UI so user knows it's not frozen
             if (UI.loadingText) {
                 UI.loadingText.textContent = `Connecting to Node ${i + 1}...`;
             }
@@ -189,13 +171,22 @@
         throw new Error("All IPFS gateways failed to load metadata.");
     }
 
+    // THE WATERFALL LOADER: Loads audio stems sequentially to avoid 504 timeouts
     async function loadAudioStreams() {
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
-        if (UI.loadingText) UI.loadingText.textContent = "Connecting Layers...";
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = true;
 
-        const loadPromises = Object.keys(state.selections.audio).map(layerId => {
-            return new Promise((resolve) => {
+        const layerIds = Object.keys(state.selections.audio);
+        
+        // Load files one by one (Sequential) instead of all at once (Parallel)
+        for (let i = 0; i < layerIds.length; i++) {
+            const layerId = layerIds[i];
+            
+            if (UI.loadingText) {
+                UI.loadingText.textContent = `Syncing Layer ${i + 1} of ${layerIds.length}: ${layerId}...`;
+            }
+
+            await new Promise((resolve) => {
                 const cid = state.selections.audio[layerId];
                 const audioNode = state.audioPool[layerId]; 
                 
@@ -240,13 +231,15 @@
                 audioNode.src = urls[attempt];
                 audioNode.load();
 
-                // 5-SECOND FAILSAFE: Do not permanently lock the UI if audio stems hang
-                setTimeout(() => finish(null), 5000);
+                // 4-SECOND FAILSAFE: Do not permanently lock the UI if audio stems hang
+                setTimeout(() => finish(null), 4000);
             });
-        });
+            
+            // Add a tiny 250ms breather between requests so the IPFS node doesn't block us
+            await new Promise(r => setTimeout(r, 250)); 
+        }
 
-        await Promise.all(loadPromises);
-
+        // --- Post-Loading Sync Logic ---
         let syncTime = 0;
         const currentActiveNodes = Object.values(state.audioPool).filter(n => !n.paused && n.volume > 0);
         if (currentActiveNodes.length > 0) syncTime = currentActiveNodes[0].currentTime;
@@ -502,11 +495,9 @@
         await loadAudioStreams(); 
     }
 
-    // THE FIX: Bulletproof Initialization
     async function init() {
         populateArtists();
         
-        // Expose loading screen instantly so the user is never left in the dark
         if (UI.loadingOverlay) {
             UI.loadingOverlay.classList.remove('hidden');
             if (UI.loadingText) UI.loadingText.textContent = "Booting Gateway & Locating Blueprint...";
@@ -517,7 +508,6 @@
             if (UI.loadingText) UI.loadingText.textContent = "Blueprint Found. Building UI...";
         } catch (e) {
             console.warn("IPFS Fetch Failed. Injecting Offline Fallback UI.", e);
-            // Inject the hardcoded data to completely bypass the crash
             state.metadata = FALLBACK_METADATA; 
             if (UI.loadingText) UI.loadingText.textContent = "Offline Mode: IPFS Blocked. UI Built from Fallback.";
         }
@@ -583,7 +573,7 @@
             });
 
             UI.controls.querySelectorAll('.layer-select').forEach(select => {
-                select.selectedIndex = 0; // Default to first option to avoid random empty selection
+                select.selectedIndex = 0; 
                 const data = JSON.parse(select.value);
                 state.selections.visuals[select.dataset.layerId] = data.visual;
                 state.selections.audio[select.dataset.layerId] = data.audio;
@@ -592,7 +582,6 @@
             renderTags();
             updateVisuals(); 
 
-            // Safely remove loading overlay after UI is locked in
             setTimeout(() => {
                 if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
             }, 1000);
