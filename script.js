@@ -3,11 +3,12 @@
     const GITHUB_BASE_URL = "./"; 
 
     const JSON_URL = "QmepLNcj9mCDaTjVvmCM6ocr9xtjvMbWNTmaCSoaYVmqgq";
+    // Reordered to prioritize faster, CORS-friendly gateways
     const IPFS_GATEWAYS = [
-        'https://ipfs.io/ipfs/', 
-        'https://cloudflare-ipfs.com/ipfs/',
         'https://dweb.link/ipfs/',
-        'https://gateway.pinata.cloud/ipfs/'
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://cloudflare-ipfs.com/ipfs/',
+        'https://ipfs.io/ipfs/' 
     ];
 
     const ARTISTS_LIST = [
@@ -115,25 +116,33 @@
         });
     }
 
+    // ARCHITECTURE FIX: Fast-Fail IPFS JSON Fetching with AbortController
     async function fetchJSON() {
         for (const gateway of IPFS_GATEWAYS) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-second hard cutoff per gateway
+
             try {
-                const res = await fetch(`${gateway}${JSON_URL}`);
+                const res = await fetch(`${gateway}${JSON_URL}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
                 if (res.ok) return await res.json();
             } catch (e) {
-                console.warn(`Gateway timeout...`);
+                clearTimeout(timeoutId);
+                console.warn(`Gateway ${gateway} timed out or failed. Hopping to next...`);
             }
         }
+        
+        // Critical Fallback UI Update
+        if (UI.loadingText) UI.loadingText.textContent = "Network Error: IPFS Gateways Blocked.";
         throw new Error("All IPFS gateways failed to load metadata.");
     }
 
+    // ARCHITECTURE FIX: True Non-Blocking Soft-Sync Audio Loading
     async function loadAudioStreams() {
         UI.loadingOverlay.classList.remove('hidden');
         if (UI.loadingText) UI.loadingText.textContent = "Connecting Layers...";
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = true;
 
-        const activeCIDs = Object.values(state.selections.audio).filter(cid => cid);
-        
         const loadPromises = Object.keys(state.selections.audio).map(layerId => {
             return new Promise((resolve) => {
                 const cid = state.selections.audio[layerId];
@@ -151,10 +160,17 @@
 
                 audioNode.volume = 0; 
                 let attempt = 0;
+                let isResolved = false;
+
+                const finish = (val) => {
+                    if (isResolved) return;
+                    isResolved = true;
+                    resolve(val);
+                };
 
                 const onCanPlay = () => {
                     if (audioNode.duration > state.duration) state.duration = audioNode.duration;
-                    resolve({ layerId, audioNode });
+                    finish({ layerId, audioNode });
                 };
 
                 audioNode.addEventListener('canplaythrough', onCanPlay, { once: true });
@@ -166,12 +182,16 @@
                         audioNode.src = urls[attempt];
                         audioNode.load();
                     } else { 
-                        resolve(null); 
+                        finish(null); 
                     }
                 }); 
                 
                 audioNode.src = urls[attempt];
                 audioNode.load();
+
+                // THE FAILSAFE: If IPFS is choking, strictly unlock this promise after 5 seconds
+                // It will continue buffering in the background and sync up later.
+                setTimeout(() => finish(null), 5000);
             });
         });
 
@@ -211,7 +231,7 @@
     }
 
     function enforceSync() {
-        if (state.isSeeking) return; // Prevent sync from firing during a seek operation
+        if (state.isSeeking) return;
 
         const nodes = Object.values(state.audioPool).filter(n => !n.paused && n.src);
         if (nodes.length <= 1) return;
@@ -241,7 +261,7 @@
             node.volume = 0;
             node.currentTime = timeToSet; 
             const p = node.play();
-            if (p !== undefined) { p.catch(err => console.warn("Safari blocked play", err)); }
+            if (p !== undefined) { p.catch(err => console.warn("Browser blocked play", err)); }
         });
 
         state.isPlaying = true;
@@ -285,7 +305,6 @@
         cancelAnimationFrame(animationFrameId);
     }
 
-    // --- THE ABSOLUTE BUFFER LOCK FIX ---
     async function seekTo(targetTime) {
         if (!state.duration || isNaN(targetTime)) return;
 
@@ -298,7 +317,6 @@
             return;
         }
 
-        // 1. Instantly update UI and show loading spinner
         const percent = (targetTime / state.duration) * 100;
         if (UI.progressFill) UI.progressFill.style.width = `${percent}%`;
         if (UI.currentTimeEl) UI.currentTimeEl.textContent = formatTime(targetTime);
@@ -306,14 +324,12 @@
         UI.loadingOverlay.classList.remove('hidden');
         if (UI.loadingText) UI.loadingText.textContent = "Syncing Layers...";
 
-        // 2. Pause and mute all tracks so they don't start playing staggeringly
         nodes.forEach(node => {
             node.pause();
             node.volume = 0;
-            node.playbackRate = 1.0; // Reset any previous pitch bending
+            node.playbackRate = 1.0; 
         });
 
-        // 3. Command the seek and wait for EVERY node to buffer independently
         const seekPromises = nodes.map(node => {
             return new Promise(resolve => {
                 const onReady = () => {
@@ -324,23 +340,20 @@
                 
                 node.addEventListener('seeked', onReady);
                 node.addEventListener('canplay', onReady);
-                
                 node.currentTime = targetTime;
 
-                // Failsafe: if a bad network hangs the event, resolve after 4s to prevent permanent lock
-                setTimeout(resolve, 4000); 
+                // Failsafe timeout to unlock seek if network hangs
+                setTimeout(resolve, 3000); 
             });
         });
 
         await Promise.all(seekPromises);
 
-        // 4. Hard-snap them all to the exact same millisecond one last time to fix micro-drifts during the wait
         nodes.forEach(node => {
             node.currentTime = targetTime;
-            node.volume = 1; // Restore volume
+            node.volume = 1; 
         });
 
-        // 5. Safely resume
         state.isSeeking = false;
         UI.loadingOverlay.classList.add('hidden');
 
@@ -389,14 +402,12 @@
 
         visuals.forEach((layer) => {
             const layerId = layer.id;
-            
             if (changedLayerId && changedLayerId !== layerId) return;
 
             const cid = state.selections.visuals[layerId];
             const slot = state.visualSlots[layerId]; 
             
             if (!slot) return;
-            
             slot.dataset.targetCid = cid;
 
             if (!cid) {
