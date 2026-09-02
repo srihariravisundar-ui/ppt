@@ -1,19 +1,19 @@
 /**
  * PANN LIVE - AUDIO & VISUAL ENGINE
- * Robust IPFS Streaming with Non-Blocking Soft-Sync, Gateway Cascading & Anti-Thrash Watchdog
+ * Robust IPFS Streaming, CORS-Compliant Visual Engine & Anti-Thrash Sync
  */
 (async function () {
     const USE_LOCAL_GITHUB_FILES = false; 
     const GITHUB_BASE_URL = "./"; 
 
-    // Reordered: High-throughput media nodes first; fallback to Pinata and Cloudflare
+    // Gateways verified for public media & cross-origin asset delivery
+    // dweb.link is omitted due to strict NotSameOrigin CORP blocks
     const IPFS_GATEWAYS = [
-        'https://dweb.link/ipfs/',
-        'https://gateway.pinata.cloud/ipfs/',
         'https://w3s.link/ipfs/',
         'https://nftstorage.link/ipfs/',
-        'https://cloudflare-ipfs.com/ipfs/',
-        'https://ipfs.io/ipfs/'
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://ipfs.io/ipfs/',
+        'https://cloudflare-ipfs.com/ipfs/'
     ];
 
     const ARTISTS_LIST = [
@@ -28,7 +28,6 @@
         "Jhanu", "Metapurse"
     ];
 
-    // ZERO-FETCH INIT: Pre-baked master layout bypasses initial JSON gateway locks
     const PANN_METADATA = {
         "name": "பண் (Pann)",
         "layout": {
@@ -154,7 +153,84 @@
     }
 
     // ============================================================================
-    // STREAMING AUDIO LOADER WITH TIMEOUT ROTATION & NON-BLOCKING SOFT-SYNC
+    // VISUAL ENGINE: CORS-SAFE IMAGE PIPELINE WITH ACTIVE RETRY CASCADING
+    // ============================================================================
+
+    function loadLayerImageWithFailover(imgElement, urls) {
+        return new Promise((resolve) => {
+            let index = 0;
+
+            const tryNext = () => {
+                if (index >= urls.length) {
+                    console.warn(`[VisualEngine] All gateways exhausted for image.`);
+                    resolve(false);
+                    return;
+                }
+
+                const testImg = new Image();
+                testImg.crossOrigin = "anonymous";
+
+                testImg.onload = () => {
+                    imgElement.src = testImg.src;
+                    resolve(true);
+                };
+
+                testImg.onerror = () => {
+                    index++;
+                    tryNext();
+                };
+
+                testImg.src = urls[index];
+            };
+
+            tryNext();
+        });
+    }
+
+    async function updateVisuals(changedLayerId = null) {
+        if (!state.metadata) return;
+        const visuals = (state.metadata.layout?.layers || []).slice(0, 10);
+
+        for (const layer of visuals) {
+            const layerId = layer.id;
+            if (changedLayerId && changedLayerId !== layerId) continue;
+
+            const cid = state.selections.visuals[layerId];
+            const slot = state.visualSlots[layerId]; 
+            if (!slot) continue;
+
+            slot.dataset.targetCid = cid;
+            if (!cid) {
+                slot.innerHTML = '';
+                continue;
+            }
+
+            const urls = getUrls(cid);
+            if (urls.length === 0) continue;
+
+            const isString = layerId.toLowerCase().includes('string');
+            const img = document.createElement('img');
+            img.className = isString ? 'bg-layer-cover' : 'layerImage';
+            img.crossOrigin = "anonymous";
+
+            const success = await loadLayerImageWithFailover(img, urls);
+            if (success && slot.dataset.targetCid === cid) {
+                const oldImages = Array.from(slot.querySelectorAll('img'));
+                oldImages.forEach(oldImg => {
+                    oldImg.classList.remove('layer-visible');
+                    setTimeout(() => { if (oldImg.parentNode) oldImg.remove(); }, 600);
+                });
+
+                slot.appendChild(img);
+                requestAnimationFrame(() => {
+                    img.classList.add('layer-visible');
+                });
+            }
+        }
+    }
+
+    // ============================================================================
+    // AUDIO ENGINE: ASYNC CASCADE WITH SAFE FALLBACK
     // ============================================================================
 
     class IPFSAudioLoader {
@@ -166,7 +242,6 @@
             const urls = getUrls(cid);
             if (urls.length === 0) return Promise.resolve(null);
 
-            // Avoid redundant network fetches if current stem matches target CID
             if (audioNode.src && urls.some(u => audioNode.src.includes(u.split('/').pop()))) {
                 return Promise.resolve(audioNode);
             }
@@ -196,7 +271,7 @@
 
                 const attemptLoad = () => {
                     if (currentGatewayIndex >= urls.length) {
-                        console.warn(`[AudioEngine] All gateways exhausted for CID: ${cid}. Non-blocking fallback.`);
+                        console.warn(`[AudioEngine] All gateways exhausted for audio CID: ${cid}.`);
                         resolve(null);
                         return;
                     }
@@ -205,9 +280,7 @@
                     audioNode.addEventListener('loadeddata', onCanPlay, { once: true });
                     audioNode.addEventListener('error', onError, { once: true });
 
-                    // 4.5 second hard-timeout per gateway before rotating to next CDN node
                     requestTimeout = setTimeout(() => {
-                        console.warn(`[AudioEngine] Gateway timeout (${urls[currentGatewayIndex]}). Hopping to next...`);
                         onError();
                     }, 4500);
 
@@ -229,7 +302,7 @@
                         } catch (err) {
                             resolve({ success: false, layerId: track.layerId });
                         }
-                    }, index * delayMs); // Micro-delay prevents ERR_NAME_NOT_RESOLVED DNS floods
+                    }, index * delayMs);
                 });
             });
             return Promise.all(promises);
@@ -238,7 +311,7 @@
 
     async function loadAudioStreams() {
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
-        if (UI.loadingText) UI.loadingText.textContent = "Connecting Audio Stems...";
+        if (UI.loadingText) UI.loadingText.textContent = "Connecting Audio Layers...";
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = true;
 
         const tracksToLoad = [];
@@ -250,7 +323,6 @@
             }
         });
 
-        // Non-blocking staggered fetch
         await IPFSAudioLoader.loadAllStaggered(tracksToLoad, 120);
 
         let syncTime = 0;
@@ -289,7 +361,7 @@
     }
 
     // ============================================================================
-    // PLAYER CONTROLS & PHASE-LOCK SYNCHRONIZATION
+    // CONTROLS & PHASE-LOCK SYNCHRONIZATION
     // ============================================================================
 
     function enforceSync() {
@@ -303,7 +375,6 @@
             if (i === 0) return;
             const drift = node.currentTime - master.currentTime;
             
-            // Soft-sync: Gentle pitch adjustments prevent sudden buffer reloads
             if (Math.abs(drift) > 0.4) {
                 node.currentTime = master.currentTime;
             } else if (Math.abs(drift) > 0.03) {
@@ -368,10 +439,6 @@
         cancelAnimationFrame(animationFrameId);
     }
 
-    // ============================================================================
-    // SEEK CONTROLLER (HTTP 206 SAFE WITH TIMEOUT RESOLVER)
-    // ============================================================================
-
     let seekDebounceTimeout = null;
 
     async function seekTo(targetTime) {
@@ -396,7 +463,6 @@
             node.currentTime = targetTime;
         });
 
-        // Bounded poller: Breaks immediately once tracks buffer or drops out after 3.5s
         await new Promise((resolve) => {
             let checks = 0;
             const interval = setInterval(() => {
@@ -461,62 +527,11 @@
         animationFrameId = requestAnimationFrame(updateLoop);
     }
 
-    // ============================================================================
-    // VISUALS & INITIALIZATION
-    // ============================================================================
-
-    function updateVisuals(changedLayerId = null) {
-        if (!state.metadata) return;
-        const visuals = (state.metadata.layout?.layers || []).slice(0, 10);
-
-        visuals.forEach((layer) => {
-            const layerId = layer.id;
-            if (changedLayerId && changedLayerId !== layerId) return;
-
-            const cid = state.selections.visuals[layerId];
-            const slot = state.visualSlots[layerId]; 
-            if (!slot) return;
-            
-            slot.dataset.targetCid = cid;
-            if (!cid) {
-                slot.innerHTML = '';
-                return;
-            }
-
-            const urls = getUrls(cid);
-            if (urls.length === 0) return;
-
-            const isString = layerId.toLowerCase().includes('string');
-            const img = new Image();
-            img.className = isString ? 'bg-layer-cover' : 'layerImage';
-
-            let attempt = 0;
-            img.onload = () => {
-                if (slot.dataset.targetCid !== cid) return;
-                const oldImages = Array.from(slot.querySelectorAll('img'));
-                oldImages.forEach(oldImg => {
-                    oldImg.classList.remove('layer-visible');
-                    setTimeout(() => { if (oldImg.parentNode) oldImg.remove(); }, 1000);
-                });
-
-                slot.appendChild(img);
-                requestAnimationFrame(() => {
-                    img.classList.add('layer-visible');
-                });
-            };
-            img.onerror = () => { 
-                attempt++; 
-                if (attempt < urls.length) img.src = urls[attempt]; 
-            };
-            img.src = urls[attempt];
-        });
-    }
-
     async function handleChange(layerId, visualCid, audioCid) {
         state.selections.visuals[layerId] = visualCid;
         state.selections.audio[layerId] = audioCid;
         renderTags(); 
-        updateVisuals(layerId); 
+        await updateVisuals(layerId); 
         await loadAudioStreams(); 
     }
 
@@ -542,7 +557,6 @@
                 audio.preload = "auto";
                 audio.preservesPitch = false;
 
-                // Anti-Thrash Watchdog: Pauses gently on starved buffers without resetting currentTime
                 audio.addEventListener('waiting', () => {
                     if (!state.isPlaying || state.isSeeking || state.isBuffering) return;
                     state.isBuffering = true;
@@ -567,7 +581,6 @@
                             state.isBuffering = false;
                             if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
                             
-                            // Play directly; enforceSync dynamically aligns any offset
                             nodes.forEach(n => {
                                 const p = n.play();
                                 if (p !== undefined) p.catch(() => {});
@@ -630,7 +643,7 @@
             });
 
             renderTags();
-            updateVisuals(); 
+            await updateVisuals(); 
 
         } catch (e) {
             console.error("Failed to initialize player components:", e);
@@ -685,7 +698,7 @@
             });
 
             renderTags();
-            updateVisuals();
+            await updateVisuals();
             await loadAudioStreams();
         });
     }
