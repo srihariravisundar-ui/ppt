@@ -1,15 +1,19 @@
+/**
+ * PANN LIVE - AUDIO & VISUAL ENGINE
+ * Robust IPFS Streaming with Non-Blocking Soft-Sync, Gateway Cascading & Anti-Thrash Watchdog
+ */
 (async function () {
     const USE_LOCAL_GITHUB_FILES = false; 
     const GITHUB_BASE_URL = "./"; 
 
-    const JSON_URL = "QmepLNcj9mCDaTjVvmCM6ocr9xtjvMbWNTmaCSoaYVmqgq";
-    
-    // Web3-Optimized Fast Gateways
+    // Reordered: High-throughput media nodes first; fallback to Pinata and Cloudflare
     const IPFS_GATEWAYS = [
-        'https://ipfs.io/ipfs/',             
-        'https://dweb.link/ipfs/',           
+        'https://dweb.link/ipfs/',
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://w3s.link/ipfs/',
+        'https://nftstorage.link/ipfs/',
         'https://cloudflare-ipfs.com/ipfs/',
-        'https://gateway.pinata.cloud/ipfs/' 
+        'https://ipfs.io/ipfs/'
     ];
 
     const ARTISTS_LIST = [
@@ -24,41 +28,47 @@
         "Jhanu", "Metapurse"
     ];
 
-    const FALLBACK_METADATA = {
-        "layout": { "layers": [
-            { "id": "Strings", "name": "Strings", "states": { "options": [{ "name": "Default String", "uri": "" }] } },
-            { "id": "Winds", "name": "Winds", "states": { "options": [{ "name": "Default Wind", "uri": "" }] } },
-            { "id": "Ambience", "name": "Ambience", "states": { "options": [{ "name": "Default Ambience", "uri": "" }] } },
-            { "id": "Rhythm", "name": "Rhythm", "states": { "options": [{ "name": "Default Rhythm", "uri": "" }] } },
-            { "id": "Traditional", "name": "Traditional", "states": { "options": [{ "name": "Default Traditional", "uri": "" }] } },
-            { "id": "Voices", "name": "Voices", "states": { "options": [{ "name": "Default Voice", "uri": "" }] } },
-            { "id": "Guitars", "name": "Guitars", "states": { "options": [{ "name": "Default Guitar", "uri": "" }] } },
-            { "id": "Keys", "name": "Keys", "states": { "options": [{ "name": "Default Keys", "uri": "" }] } },
-            { "id": "Electronic", "name": "Electronic", "states": { "options": [{ "name": "Default Electronic", "uri": "" }] } }
-        ]},
-        "audio-layout": { "layers": [
-            { "id": "Strings", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Winds", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Ambience", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Rhythm", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Traditional", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Voices", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Guitars", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Keys", "states": { "options": [{ "uri": "" }] } },
-            { "id": "Electronic", "states": { "options": [{ "uri": "" }] } }
-        ]}
+    // ZERO-FETCH INIT: Pre-baked master layout bypasses initial JSON gateway locks
+    const PANN_METADATA = {
+        "name": "பண் (Pann)",
+        "layout": {
+            "layers": [
+                { "id": "Strings", "states": { "options": [{ "uri": "QmbmRmMToTbS6NQRC2BNEjVHHp9P6yNRJGzwD62QnqFP7Y", "label": "Bright" }, { "uri": "QmWCWvSsBMiSdwg2ULf63ckgN8GaXWju4nZAJ6PRcmAgfo", "label": "Dark" }, { "uri": "QmZqBpUgr1yS3s8C4K36amxXMBBvMiTegV8JhA2zvq5vmT", "label": "Ambient" }] } },
+                { "id": "Winds", "states": { "options": [{ "uri": "Qmb3CLHtFbbQbpiZ5jebxjVPbv5bC6UFnezpqrpApSKmAL", "label": "Bamboo Flute" }, { "uri": "QmUiB45C58Q8mqHpXEt9KGbkvQscdcMqdrZCbM1NLwYpwV", "label": "Penny Whistle" }, { "uri": "QmUmJSCgCuXkJ9tJwLpExf4SxvnZNLySJ6ujSGwxTJ3Dmv", "label": "Melodica" }, { "uri": "QmdyJk4e1NAP3bWTXahE1EDykDbFsRjHc9xW2RVthxUULT", "label": "Nadaswaram" }] } },
+                { "id": "Ambience", "states": { "options": [{ "uri": "QmXzwiB3BK5wUfpTtYQ4RfC9Dw2i1VDsLVnyYSXPnfg3xt", "label": "Kurinji" }, { "uri": "QmW6vRQFSSqLDmWUxXgoRuU1siZEMDcoxzj8BKZ12kZGSa", "label": "Mullai" }, { "uri": "QmQNLJ9L3RmXzL5RwQR3KYaJbZ2Fz1RLZZJaicNzf5kiMJ", "label": "Marutham" }, { "uri": "QmVhTuuS9rNBNrAEVmcXfXchUGW6ZaBME91cwwGzBwDFyp", "label": "Neidhal" }, { "uri": "Qme6JxTt7odkQK1gDFUZaL6URTgUbHMo9GKEgKqbnKD2eM", "label": "Paalai" }] } },
+                { "id": "Rhythm", "states": { "options": [{ "uri": "QmaKqFEEQ2C4ygmHQAHFoN1aTH1t55Hofh5hZtCSkq99WF", "label": "Mridangam & Latin" }, { "uri": "QmNRLwMo4cCeLAp298me2WrPidGvsHubrbvrjuQjoqHkxq", "label": "Acoustic Drums" }, { "uri": "QmNWupbdybDgGHoqd6St2nBYijVF73vtTHwssWFGRssCtk", "label": "Folk" }] } },
+                { "id": "Traditional", "states": { "options": [{ "uri": "QmU19EK7gmy4wo8zaCZyfbabWrkxEgj15LowkZZszAJk7Y", "label": "Sarangi" }, { "uri": "QmStrZzJ33o8eF4XpQVXAvstrFcV1pzuKNof7wRj7gKE7f", "label": "Veena" }, { "uri": "QmZR9UZaMniXqB5REKiK4yDJbuAKTQtmoWtwQTKKKHDcp3", "label": "Slide Guitar - Live" }] } },
+                { "id": "Voices", "states": { "options": [{ "uri": "Qmadsy39UVhtsR9V5TUTqFpLpZLWfRvTUBApMdwQv7xyTq", "label": "Solo" }, { "uri": "QmQTxQauxBL9qbj6XbLT9zsmEhsZr6Zf6RgDhVpEEM3RCj", "label": "Folk voice" }, { "uri": "QmSnk8wDVUiBH5RBFoF2T3JZsnr4Z8Yp5Pp5ds1GGMNEwj", "label": "Choir" }] } },
+                { "id": "Guitars", "states": { "options": [{ "uri": "QmaJSSmhtY5tjx1eQPR5d4ZCdCiMxevzHAhsqwUE9z3FbS", "label": "Acoustic" }, { "uri": "QmWYuyydDJFNYsBkWgMjHMRCANmencFgTTPBFAGzwKpqi8", "label": "Electric" }] } },
+                { "id": "Keys", "states": { "options": [{ "uri": "Qme2Ykbfp8YaFq6A3U1BciXafZW6wsHPAuDhSfCWAiETUC", "label": "Piano" }, { "uri": "QmQYQGA3Voq8xR8y1qEe3fR5HucuZZ7TBG4wkBKG8Lcr56", "label": "Mallet - Live" }] } },
+                { "id": "Electronic", "states": { "options": [{ "uri": "QmSfv4ZcHqjS38zWErJaZfZMBKCCYxamXqkeih4GNVuaTu", "label": "Synth & Bass" }, { "uri": "QmW6SuYciNzd7CigdKArqnrZ4Q9By3LXsK65ftwUuRhFn5", "label": "Modular" }, { "uri": "QmVBpVcrBqJqoKGCHzLBUiynkFyRXJHiG38oKsJgGPB3QL", "label": "Live reactive layer" }] } }
+            ]
+        },
+        "audio-layout": {
+            "layers": [
+                { "id": "01_Strings", "states": { "options": [{ "uri": "QmUzMyhSm2HYYexMbZp5BjRJ5wqPTCRvKvDiU8udL5AHPM" }, { "uri": "QmXdM8k6Wje2BwHrigWUmcHAYQar9BfCkQcTMdPtqajWrN" }, { "uri": "QmTLcwbXoXgU2jWjqP7hBFFFtmEJiD22Y7bUw7uSem7UKp" }] } },
+                { "id": "02_Winds", "states": { "options": [{ "uri": "Qmc8t887PbT2poBxdXsfEqxUec673aiiREJRg9fnLxJTk7" }, { "uri": "QmWfK4k67yi3aPtJ74vo4tyg7zuxGUxEzLTsTEdLUtZbnK" }, { "uri": "QmUe5QD12QpMeHRMj924d1KQTXcTAPZ31QXZZc4iYxGdsc" }, { "uri": "QmRPpPzNQunUHGR5gtHi6Gjd8zb969yQcMHZNpHJ5ihePj" }] } },
+                { "id": "03_Ambience", "states": { "options": [{ "uri": "QmfKFKHX8ptEwR7PECjPsofmkqT8hh3xueb3Hq27hGoVGj" }, { "uri": "QmbYZBUaeT6Ei25Xr9eRXtevLBtqQWEb8eEXJaUU71V9pW" }, { "uri": "QmXnHWdEnCxrgf2V3FBmSW8iaD1yBLcA4zt5ftzAshBJMy" }, { "uri": "QmX9Vpgka1FXq2HjzUhvuT7fNRgLtspdWVWfXd5fdpgymx" }, { "uri": "QmeMzFuXRU6UGkCHMv5hmYuoyZHxgGPCAuU8uBBuzNc6gL" }] } },
+                { "id": "04_Rhythm", "states": { "options": [{ "uri": "Qmd7tYFcQ2wfTi1agT8JkannB1VP8dSRypzAdY7ksvnim6" }, { "uri": "QmdwD8ix4qJmRB4SaEBuC8XV19UZR24j7fzmV8jiKBqtDG" }, { "uri": "QmV3ifuMB86MKe1GcPsZrRnSpuBkCkPfLJacqTvDD5gXPE" }] } },
+                { "id": "05_Traditional", "states": { "options": [{ "uri": "QmRaVXfrm6kvhifNcAaCnbVFYdUY3RfbGTe68qnKhrD5tf" }, { "uri": "QmTvvHMtJdH9BsNeC7Fj3K2ZyoPKFCLo7hAHtu2Ke5VzTu" }, { "uri": "QmPGjwNkL7EncSw8oaemu74P4FArV9SFTvbL8jDNq63V9W" }] } },
+                { "id": "06_Voices", "states": { "options": [{ "uri": "QmVqTxhTDSxQXrgAdsjSeUjJWzKXThcWDj4RdBscFhP2X8" }, { "uri": "QmP9pF8S6N4R2o3XXHoBEYxty1eGeQC35TyaMkcarFnEWL" }, { "uri": "QmUbc8aDcn7ex9ZUhNVWPCMNPkCTnfp3Vcut98ZYFw72At" }] } },
+                { "id": "07_Guitars", "states": { "options": [{ "uri": "QmXtU8d6oAziz9gSZMGcTaZJhKngaGxApohpsBVK2QVxpN" }, { "uri": "QmcELdRFmMLXHUcwrdZE59Y2PdcbhBwK7oSESsLziTuECY" }] } },
+                { "id": "08_Keys", "states": { "options": [{ "uri": "QmSr6Qi78jdTPnq3zc7agYiJGT8pu1rnxUN1n5eFZYV1EQ" }, { "uri": "QmbD4gogjdncWrErqeWuJF8JXDnBthBiNZhU7rpYTAU4QR" }] } },
+                { "id": "09_Electronic", "states": { "options": [{ "uri": "QmQRf8iNjrcN9gF7A6UVpuHss79owBMRRBs28EMSHKNzxz" }, { "uri": "QmeDjc6Ln2ZPWeHa1aDoNCoMsBRvzSkrdhowaLcMN3wkq9" }, { "uri": "QmR6K8HUsXT185jScgpNUTzYBSorxPoW4oCBZVh9nqbgrk" }] } }
+            ]
+        }
     };
 
     const state = {
         metadata: null,
         audioPool: {}, 
-        imagePool: {}, // VISUAL CACHE POOL
         visualSlots: {}, 
         selections: { visuals: {}, audio: {} },
         isPlaying: false,
         duration: 0,
         syncInterval: null,
-        isSeeking: false
+        isSeeking: false,
+        isBuffering: false
     };
 
     let animationFrameId = null;
@@ -134,7 +144,7 @@
         UI.activeTags.innerHTML = '';
         UI.controls.querySelectorAll('.layer-select').forEach(select => {
             const opt = select.options[select.selectedIndex];
-            if (opt && opt.text && !opt.text.includes("Option")) {
+            if (opt) {
                 const tag = document.createElement("span");
                 tag.className = "playing-tag";
                 tag.textContent = opt.text;
@@ -143,156 +153,178 @@
         });
     }
 
-    async function fetchJSON() {
-        for (let i = 0; i < IPFS_GATEWAYS.length; i++) {
-            const gateway = IPFS_GATEWAYS[i];
-            if (UI.loadingText) UI.loadingText.textContent = `Connecting to Node ${i + 1}...`;
+    // ============================================================================
+    // STREAMING AUDIO LOADER WITH TIMEOUT ROTATION & NON-BLOCKING SOFT-SYNC
+    // ============================================================================
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500); 
+    class IPFSAudioLoader {
+        static async loadStemWithFailover(audioNode, cid) {
+            audioNode.crossOrigin = "anonymous";
+            audioNode.preload = "auto";
+            audioNode.volume = 0;
 
-            try {
-                const res = await fetch(`${gateway}${JSON_URL}`, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                if (res.ok) return await res.json();
-            } catch (e) {
-                clearTimeout(timeoutId);
+            const urls = getUrls(cid);
+            if (urls.length === 0) return Promise.resolve(null);
+
+            // Avoid redundant network fetches if current stem matches target CID
+            if (audioNode.src && urls.some(u => audioNode.src.includes(u.split('/').pop()))) {
+                return Promise.resolve(audioNode);
             }
+
+            return new Promise((resolve) => {
+                let currentGatewayIndex = 0;
+                let requestTimeout = null;
+
+                const cleanup = () => {
+                    if (requestTimeout) clearTimeout(requestTimeout);
+                    audioNode.removeEventListener('canplaythrough', onCanPlay);
+                    audioNode.removeEventListener('loadeddata', onCanPlay);
+                    audioNode.removeEventListener('error', onError);
+                };
+
+                const onCanPlay = () => {
+                    cleanup();
+                    if (audioNode.duration > state.duration) state.duration = audioNode.duration;
+                    resolve(audioNode);
+                };
+
+                const onError = () => {
+                    cleanup();
+                    currentGatewayIndex++;
+                    attemptLoad();
+                };
+
+                const attemptLoad = () => {
+                    if (currentGatewayIndex >= urls.length) {
+                        console.warn(`[AudioEngine] All gateways exhausted for CID: ${cid}. Non-blocking fallback.`);
+                        resolve(null);
+                        return;
+                    }
+
+                    audioNode.addEventListener('canplaythrough', onCanPlay, { once: true });
+                    audioNode.addEventListener('loadeddata', onCanPlay, { once: true });
+                    audioNode.addEventListener('error', onError, { once: true });
+
+                    // 4.5 second hard-timeout per gateway before rotating to next CDN node
+                    requestTimeout = setTimeout(() => {
+                        console.warn(`[AudioEngine] Gateway timeout (${urls[currentGatewayIndex]}). Hopping to next...`);
+                        onError();
+                    }, 4500);
+
+                    audioNode.src = urls[currentGatewayIndex];
+                    audioNode.load();
+                };
+
+                attemptLoad();
+            });
         }
-        throw new Error("Metadata failed.");
-    }
 
-    function getOrCreateAudioNode(cid) {
-        if (state.audioPool[cid]) return state.audioPool[cid];
-        
-        const audio = new Audio();
-        audio.crossOrigin = "anonymous";
-        audio.loop = true;
-        audio.preload = "auto";
-        audio.preservesPitch = false;
-        
-        const urls = getUrls(cid);
-        if (urls.length === 0) return audio;
-
-        let attempt = 0;
-        audio.addEventListener('error', () => {
-            attempt++;
-            if (attempt < urls.length) {
-                audio.src = urls[attempt];
-                audio.load();
-            }
-        });
-        
-        audio.src = urls[attempt];
-        audio.load();
-        
-        state.audioPool[cid] = audio;
-        return audio;
+        static async loadAllStaggered(tracks, delayMs = 120) {
+            const promises = tracks.map((track, index) => {
+                return new Promise((resolve) => {
+                    setTimeout(async () => {
+                        try {
+                            const result = await this.loadStemWithFailover(track.audioNode, track.cid);
+                            resolve({ success: !!result, layerId: track.layerId });
+                        } catch (err) {
+                            resolve({ success: false, layerId: track.layerId });
+                        }
+                    }, index * delayMs); // Micro-delay prevents ERR_NAME_NOT_RESOLVED DNS floods
+                });
+            });
+            return Promise.all(promises);
+        }
     }
 
     async function loadAudioStreams() {
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
-        if (UI.loadingText) UI.loadingText.textContent = "Syncing Neural Mix...";
+        if (UI.loadingText) UI.loadingText.textContent = "Connecting Audio Stems...";
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = true;
 
-        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
-        
-        const loadPromises = targetCids.map(cid => {
-            return new Promise(resolve => {
-                const node = getOrCreateAudioNode(cid);
-                
-                if (node.readyState >= 3) {
-                    if (node.duration > state.duration) state.duration = node.duration;
-                    resolve();
-                    return;
-                }
-
-                let isResolved = false;
-                const finish = () => {
-                    if (isResolved) return;
-                    isResolved = true;
-                    if (node.duration > state.duration) state.duration = node.duration;
-                    resolve();
-                };
-
-                node.addEventListener('canplaythrough', finish, { once: true });
-                node.addEventListener('loadeddata', finish, { once: true });
-
-                setTimeout(finish, 3500); 
-            });
-        });
-
-        await Promise.all(loadPromises);
-
-        let masterTime = 0;
-        const currentlyPlaying = Object.values(state.audioPool).filter(n => !n.paused && n.volume > 0);
-        if (currentlyPlaying.length > 0) masterTime = currentlyPlaying[0].currentTime;
-
-        Object.values(state.audioPool).forEach(node => {
-            node.volume = 0;
-            if (!targetCids.includes(Object.keys(state.audioPool).find(key => state.audioPool[key] === node))) {
-                node.pause(); 
+        const tracksToLoad = [];
+        Object.keys(state.selections.audio).forEach(layerId => {
+            const cid = state.selections.audio[layerId];
+            const audioNode = state.audioPool[layerId]; 
+            if (cid && audioNode) {
+                tracksToLoad.push({ layerId, cid, audioNode });
             }
         });
 
-        targetCids.forEach(cid => {
-            const node = state.audioPool[cid];
-            if (node) {
+        // Non-blocking staggered fetch
+        await IPFSAudioLoader.loadAllStaggered(tracksToLoad, 120);
+
+        let syncTime = 0;
+        const activeNodes = Object.values(state.audioPool).filter(n => !n.paused && n.volume > 0 && n.readyState >= 2);
+        if (activeNodes.length > 0) syncTime = activeNodes[0].currentTime;
+
+        Object.keys(state.selections.audio).forEach(layerId => {
+            const cid = state.selections.audio[layerId];
+            const node = state.audioPool[layerId];
+            
+            if (cid && node) {
                 if (state.isPlaying) {
-                    node.currentTime = masterTime;
+                    node.currentTime = syncTime;
                     const p = node.play();
                     if (p !== undefined) p.catch(() => {});
                 }
-                node.volume = 1;
+            } else if (node) {
+                node.pause();
             }
         });
 
         if (state.isPlaying) {
             enforceSync();
-            setTimeout(enforceSync, 200);
+            setTimeout(() => { enforceSync(); }, 250);
+            
+            Object.keys(state.selections.audio).forEach(layerId => {
+                if (state.selections.audio[layerId] && state.audioPool[layerId].readyState >= 2) {
+                    state.audioPool[layerId].volume = 1;
+                }
+            });
         }
 
-        if (UI.totalTimeEl && state.duration > 0) UI.totalTimeEl.textContent = formatTime(state.duration);
+        if (UI.totalTimeEl) UI.totalTimeEl.textContent = formatTime(state.duration);
         if (UI.playPauseBtn) UI.playPauseBtn.disabled = false;
         if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
     }
 
-    function enforceSync() {
-        if (state.isSeeking) return;
+    // ============================================================================
+    // PLAYER CONTROLS & PHASE-LOCK SYNCHRONIZATION
+    // ============================================================================
 
-        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
-        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n && !n.paused && n.readyState > 0);
+    function enforceSync() {
+        if (state.isSeeking || state.isBuffering) return;
+
+        const nodes = Object.values(state.audioPool).filter(n => !n.paused && n.src && n.readyState >= 2);
+        if (nodes.length <= 1) return;
         
-        if (activeNodes.length <= 1) return;
-        
-        const master = activeNodes[0];
-        for (let i = 1; i < activeNodes.length; i++) {
-            const node = activeNodes[i];
+        const master = nodes[0];
+        nodes.forEach((node, i) => {
+            if (i === 0) return;
             const drift = node.currentTime - master.currentTime;
             
-            if (Math.abs(drift) > 0.2) {
+            // Soft-sync: Gentle pitch adjustments prevent sudden buffer reloads
+            if (Math.abs(drift) > 0.4) {
                 node.currentTime = master.currentTime;
             } else if (Math.abs(drift) > 0.03) {
                 node.playbackRate = master.playbackRate - (drift * 0.4); 
             } else {
                 node.playbackRate = 1.0;
             }
-        }
+        });
     }
 
     function playAudio(targetTime = null) {
-        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
-        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n);
-        
-        if (activeNodes.length === 0) return;
+        const nodes = Object.values(state.audioPool).filter(n => n.src);
+        if (nodes.length === 0) return;
 
-        const timeToSet = targetTime !== null ? targetTime : (activeNodes[0].currentTime || 0);
+        const timeToSet = targetTime !== null ? targetTime : (nodes[0].currentTime || 0);
         
-        activeNodes.forEach(node => { 
+        nodes.forEach(node => { 
             node.volume = 0;
             node.currentTime = timeToSet; 
             const p = node.play();
-            if (p !== undefined) p.catch(() => {});
+            if (p !== undefined) { p.catch(() => {}); }
         });
 
         state.isPlaying = true;
@@ -303,8 +335,8 @@
 
         setTimeout(() => {
             enforceSync();
-            activeNodes.forEach(node => { node.volume = 1; });
-        }, 250);
+            nodes.forEach(node => { if(node.readyState >= 2) node.volume = 1; });
+        }, 200);
 
         if (state.syncInterval) clearInterval(state.syncInterval);
         state.syncInterval = setInterval(enforceSync, 600); 
@@ -336,60 +368,59 @@
         cancelAnimationFrame(animationFrameId);
     }
 
+    // ============================================================================
+    // SEEK CONTROLLER (HTTP 206 SAFE WITH TIMEOUT RESOLVER)
+    // ============================================================================
+
+    let seekDebounceTimeout = null;
+
     async function seekTo(targetTime) {
         if (!state.duration || isNaN(targetTime)) return;
 
         state.isSeeking = true;
         if (state.syncInterval) clearInterval(state.syncInterval);
 
-        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
-        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n && n.src);
-        
-        if (activeNodes.length === 0) {
+        const nodes = Object.values(state.audioPool).filter(n => n.src);
+        if (nodes.length === 0) {
             state.isSeeking = false;
             return;
         }
 
-        const percent = (targetTime / state.duration) * 100;
-        if (UI.progressFill) UI.progressFill.style.width = `${percent}%`;
-        if (UI.currentTimeEl) UI.currentTimeEl.textContent = formatTime(targetTime);
-
         if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
-        if (UI.loadingText) UI.loadingText.textContent = "Realigning Stems...";
+        if (UI.loadingText) UI.loadingText.textContent = "Seeking Buffers...";
 
-        activeNodes.forEach(node => {
-            node.pause();
-            node.volume = 0; 
-            node.playbackRate = 1.0; 
+        nodes.forEach(node => {
+            if (!node.paused) node.pause();
+            node.volume = 0;
+            node.playbackRate = 1.0;
+            node.currentTime = targetTime;
         });
 
-        const seekPromises = activeNodes.map(node => {
-            return new Promise(resolve => {
-                const onReady = () => {
-                    node.removeEventListener('seeked', onReady);
+        // Bounded poller: Breaks immediately once tracks buffer or drops out after 3.5s
+        await new Promise((resolve) => {
+            let checks = 0;
+            const interval = setInterval(() => {
+                checks++;
+                const ready = nodes.every(n => n.readyState >= 2);
+                if (ready || checks > 17) {
+                    clearInterval(interval);
                     resolve();
-                };
-                node.addEventListener('seeked', onReady);
-                node.currentTime = targetTime;
-                
-                setTimeout(resolve, 2000); 
-            });
+                }
+            }, 200);
         });
 
-        await Promise.all(seekPromises);
-
-        activeNodes.forEach(node => {
-            node.currentTime = targetTime; 
+        nodes.forEach(node => {
+            if (node.readyState >= 2) node.volume = 1;
         });
 
         state.isSeeking = false;
         if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
 
         if (state.isPlaying) {
-            const playPromises = activeNodes.map(node => node.play().catch(() => {}));
-            await Promise.all(playPromises);
-            
-            activeNodes.forEach(node => { node.volume = 1; });
+            nodes.forEach(node => {
+                const p = node.play();
+                if (p !== undefined) p.catch(() => {});
+            });
             state.syncInterval = setInterval(enforceSync, 600);
         }
     }
@@ -406,24 +437,34 @@
         }
 
         if (clientX === undefined || clientX === null) return;
+
         const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-        seekTo(percentage * state.duration);
+        const targetTime = percentage * state.duration;
+
+        if (UI.progressFill) UI.progressFill.style.width = `${percentage * 100}%`;
+        if (UI.currentTimeEl) UI.currentTimeEl.textContent = formatTime(targetTime);
+
+        clearTimeout(seekDebounceTimeout);
+        seekDebounceTimeout = setTimeout(() => {
+            seekTo(targetTime);
+        }, 300);
     }
 
     function updateLoop() {
         if (!state.isPlaying || state.isSeeking) return;
-        const targetCids = Object.values(state.selections.audio).filter(cid => cid);
-        const activeNodes = targetCids.map(cid => state.audioPool[cid]).filter(n => n && !n.paused && n.readyState > 0);
-        
-        if (activeNodes.length > 0 && UI.progressFill && UI.currentTimeEl) {
-            const current = activeNodes[0].currentTime;
+        const nodes = Object.values(state.audioPool).filter(n => !n.paused && n.src);
+        if (nodes.length > 0 && UI.progressFill && UI.currentTimeEl) {
+            const current = nodes[0].currentTime;
             UI.progressFill.style.width = `${(current / state.duration) * 100}%`;
             UI.currentTimeEl.textContent = formatTime(current);
         }
         animationFrameId = requestAnimationFrame(updateLoop);
     }
 
-    // THE FIX: VISUAL RAM CACHE POOL
+    // ============================================================================
+    // VISUALS & INITIALIZATION
+    // ============================================================================
+
     function updateVisuals(changedLayerId = null) {
         if (!state.metadata) return;
         const visuals = (state.metadata.layout?.layers || []).slice(0, 10);
@@ -434,49 +475,39 @@
 
             const cid = state.selections.visuals[layerId];
             const slot = state.visualSlots[layerId]; 
-            
             if (!slot) return;
+            
             slot.dataset.targetCid = cid;
-
             if (!cid) {
                 slot.innerHTML = '';
-                return;
-            }
-
-            const isString = layerId.toLowerCase().includes('string');
-            
-            const renderImage = (imgSource) => {
-                if (slot.dataset.targetCid !== cid) return;
-                
-                const img = imgSource.cloneNode(); 
-                img.className = isString ? 'bg-layer-cover' : 'layerImage';
-                
-                const oldImages = Array.from(slot.querySelectorAll('img'));
-                oldImages.forEach(oldImg => {
-                    oldImg.classList.remove('layer-visible');
-                    setTimeout(() => { if (oldImg.parentNode) oldImg.remove(); }, 1200);
-                });
-                
-                slot.appendChild(img);
-                requestAnimationFrame(() => img.classList.add('layer-visible'));
-            };
-
-            // If it's already in the pool, render it instantly
-            if (state.imagePool[cid]) {
-                renderImage(state.imagePool[cid]);
                 return;
             }
 
             const urls = getUrls(cid);
             if (urls.length === 0) return;
 
+            const isString = layerId.toLowerCase().includes('string');
             const img = new Image();
+            img.className = isString ? 'bg-layer-cover' : 'layerImage';
+
             let attempt = 0;
             img.onload = () => {
-                state.imagePool[cid] = img; // Save to RAM for next time
-                renderImage(img);
+                if (slot.dataset.targetCid !== cid) return;
+                const oldImages = Array.from(slot.querySelectorAll('img'));
+                oldImages.forEach(oldImg => {
+                    oldImg.classList.remove('layer-visible');
+                    setTimeout(() => { if (oldImg.parentNode) oldImg.remove(); }, 1000);
+                });
+
+                slot.appendChild(img);
+                requestAnimationFrame(() => {
+                    img.classList.add('layer-visible');
+                });
             };
-            img.onerror = () => { attempt++; if (attempt < urls.length) img.src = urls[attempt]; };
+            img.onerror = () => { 
+                attempt++; 
+                if (attempt < urls.length) img.src = urls[attempt]; 
+            };
             img.src = urls[attempt];
         });
     }
@@ -492,42 +523,79 @@
     async function init() {
         populateArtists();
         
-        if (UI.loadingOverlay) {
-            UI.loadingOverlay.classList.remove('hidden');
-            if (UI.loadingText) UI.loadingText.textContent = "Fetching Blueprint...";
-        }
-        
         try {
-            state.metadata = await fetchJSON();
-        } catch (e) {
-            state.metadata = FALLBACK_METADATA; 
-        }
-
-        try {
+            state.metadata = PANN_METADATA;
+            
             const visuals = (state.metadata.layout?.layers || []).slice(0, 10);
             const audios = (state.metadata["audio-layout"]?.layers || []).slice(0, 10);
 
             if (UI.controls) UI.controls.innerHTML = '';
             
+            let bufferDebounce = null;
+
             visuals.forEach((layer, index) => {
                 const layerId = layer.id || `layer_${index}`;
                 
+                const audio = new Audio();
+                audio.crossOrigin = "anonymous";
+                audio.loop = true;
+                audio.preload = "auto";
+                audio.preservesPitch = false;
+
+                // Anti-Thrash Watchdog: Pauses gently on starved buffers without resetting currentTime
+                audio.addEventListener('waiting', () => {
+                    if (!state.isPlaying || state.isSeeking || state.isBuffering) return;
+                    state.isBuffering = true;
+                    
+                    if (UI.loadingOverlay) UI.loadingOverlay.classList.remove('hidden');
+                    if (UI.loadingText) UI.loadingText.textContent = "Re-buffering Layer...";
+
+                    Object.values(state.audioPool).forEach(n => {
+                        if (!n.paused) n.pause(); 
+                    });
+                });
+
+                audio.addEventListener('canplay', () => {
+                    if (!state.isPlaying || state.isSeeking || !state.isBuffering) return;
+                    
+                    clearTimeout(bufferDebounce);
+                    bufferDebounce = setTimeout(() => {
+                        const nodes = Object.values(state.audioPool).filter(n => n.src);
+                        const ready = nodes.every(n => n.readyState >= 2);
+                        
+                        if (ready && state.isBuffering) {
+                            state.isBuffering = false;
+                            if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
+                            
+                            // Play directly; enforceSync dynamically aligns any offset
+                            nodes.forEach(n => {
+                                const p = n.play();
+                                if (p !== undefined) p.catch(() => {});
+                            });
+                        }
+                    }, 400); 
+                });
+
+                state.audioPool[layerId] = audio;
+
                 const slot = document.createElement('div');
                 slot.className = 'layer-slot';
                 slot.style.zIndex = index + 5; 
                 
                 const isString = layerId.toLowerCase().includes('string');
-                if (isString && UI.playerBg) {
-                    UI.playerBg.appendChild(slot);
-                } else if (UI.layerContainer) {
-                    UI.layerContainer.appendChild(slot);
+                if (isString) {
+                    if (UI.playerBg) UI.playerBg.appendChild(slot);
+                } else {
+                    if (UI.layerContainer) UI.layerContainer.appendChild(slot);
                 }
                 state.visualSlots[layerId] = slot;
 
                 if (layer.states?.options?.length > 0) {
                     const audioLayer = audios[index];
+                    
                     const div = document.createElement("div");
                     div.className = "dropdown-group";
+                    
                     const label = document.createElement("label");
                     label.textContent = layer.name || layerId.replace(/[_-]/g, ' ');
                     
@@ -554,7 +622,6 @@
                 }
             });
 
-            // Set random initial selection
             UI.controls.querySelectorAll('.layer-select').forEach(select => {
                 select.selectedIndex = Math.floor(Math.random() * select.options.length);
                 const data = JSON.parse(select.value);
@@ -565,12 +632,8 @@
             renderTags();
             updateVisuals(); 
 
-            setTimeout(() => {
-                if (UI.loadingOverlay) UI.loadingOverlay.classList.add('hidden');
-            }, 500);
-
         } catch (e) {
-            console.error("UI Build Failure", e);
+            console.error("Failed to initialize player components:", e);
         }
     }
 
@@ -583,9 +646,12 @@
 
     if (UI.enterBtn && UI.gatewayPage && UI.playerPage) {
         UI.enterBtn.addEventListener('click', async () => {
-            const unlock = new Audio();
-            unlock.volume = 0;
-            unlock.play().catch(()=>{});
+            Object.values(state.audioPool).forEach(node => {
+                node.volume = 0;
+                const p = node.play();
+                if (p !== undefined) p.catch(()=>{});
+                node.pause();
+            });
 
             UI.gatewayPage.classList.remove('active');
             setTimeout(() => {
@@ -599,7 +665,7 @@
     }
 
     if (UI.playPauseBtn) {
-        UI.playPauseBtn.addEventListener('click', () => {
+        UI.playPauseBtn.addEventListener('click', async () => {
             if (state.isPlaying) pauseAudio();
             else playAudio();
         });
